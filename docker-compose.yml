@@ -1,0 +1,99 @@
+version: "3.9"
+
+x-common-env: &common-env
+  PUID: $PUID
+  PGID: $PGID
+  TZ: $TZ
+
+x-common-base: &common-base
+  restart: unless-stopped
+  networks: media
+  environment: *common-env
+
+x-common-pvr: &common-pvr
+  restart: unless-stopped
+  network: media
+  environment: *common-env
+  profiles: pvr
+  volumes:
+    $dataFolder:/data
+
+x-common-download: &common-download
+  restart: unless-stopped
+  network: media
+  environment: *common-env
+  volumes:
+    $downloadsFolder:/data/download
+
+x-common-stream: &common-stream
+  restart: unless-stopped
+  network: media
+  environment: *common-env
+  volumes:
+    $libraryFolder:/data/media
+    $realdebridFolder:/realdebrid
+
+networks:
+  media:
+services:
+  radarr:
+    <<: *common-pvr
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    ports:
+      - "7878:7878"
+    volumes:
+      - $configFolder/radarr:/config
+      - /mnt/remote/realdebrid:/realdebrid:rslave
+  sonarr:
+    <<: *common-pvr
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    ports:
+      - "7878:7878"
+    volumes:
+      - $configFolder/sonarr:/config
+      - /mnt/remote/realdebrid:/realdebrid:rslave
+  prowlarr:
+    <<: *common-base
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    ports:
+      - "7878:7878"
+    volumes:
+      - $configFolder/prowlarr:/config
+  zurg:
+    <<: *common-base
+    image: ghcr.io/debridmediamanager/zurg-testing:latest    
+    container_name: zurg
+    ports:
+      - 9999:9999
+    volumes:
+      - $configFolder/zurg/config.yml:/app/config.yml
+      - $configFolder/zurg/data:/app/data
+  rclone:
+    <<: *common-base
+    image: rclone/rclone:latest
+    container_name: rclone
+    volumes:
+      - /mnt/remote/realdebrid:/realdebrid:rshared # CHANGE /mnt/zurg WITH YOUR PREFERRED MOUNT PATH
+      - $configFolder/rclone/rclone.conf:/config/rclone/rclone.conf
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    devices:
+      - /dev/fuse:/dev/fuse:rwm
+    depends_on:
+      - zurg
+    command: "mount zurg: /data --allow-other --allow-non-empty --dir-cache-time 10s --vfs-cache-mode full"
+  decypharr:
+    <<: *common-download
+    image: cy01/blackhole:latest
+    container_name: decypharr
+    ports:
+      - "8282:8282"
+    volumes:
+      - /mnt/remote/realdebrid:/realdebrid:rslave
+  plex:
+    <<: common-stream
