@@ -1,5 +1,8 @@
 version: "3.9"
 
+##########################
+#### Common Variables ####
+##########################
 x-common-env: &common-env
   PUID: $PUID
   PGID: $PGID
@@ -10,56 +13,49 @@ x-common-base: &common-base
   networks: media
   environment: *common-env
 
-x-common-pvr: &common-pvr
-  restart: unless-stopped
-  network: media
-  environment: *common-env
-  profiles: pvr
-  volumes:
-    $dataFolder:/data
+x-volumes:
+  - &vol_data ${dataFolder}:/data
+  - &vol_dl   ${downloadsFolder}:/data/download
+  - &vol_rd   ${realdebridFolder}:/realdebrid:rslave
+  - &vol_lib  ${libraryFolder}:/data/media
 
-x-common-download: &common-download
-  restart: unless-stopped
-  network: media
-  environment: *common-env
-  volumes:
-    $downloadsFolder:/data/download
-
-x-common-stream: &common-stream
-  restart: unless-stopped
-  network: media
-  environment: *common-env
-  volumes:
-    $libraryFolder:/data/media
-    $realdebridFolder:/realdebrid
-
+##########################
+######## Networks ########
+##########################
 networks:
   media:
+
+##########################
+######## Services ########
+##########################
+
 services:
   radarr:
-    <<: *common-pvr
+    <<: *common-base
     image: lscr.io/linuxserver/radarr:latest
     container_name: radarr
     ports:
       - "7878:7878"
     volumes:
+      - *vol_data
+      - *vol_rd
       - $configFolder/radarr:/config
-      - /mnt/remote/realdebrid:/realdebrid:rslave
   sonarr:
-    <<: *common-pvr
+    <<: *common-base
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
     ports:
-      - "7878:7878"
+      - "8989:8989"
     volumes:
+      - *vol_data
+      - *vol_rd
       - $configFolder/sonarr:/config
-      - /mnt/remote/realdebrid:/realdebrid:rslave
   prowlarr:
     <<: *common-base
     image: lscr.io/linuxserver/prowlarr:latest
     container_name: prowlarr
     ports:
-      - "7878:7878"
+      - "9696:9696"
     volumes:
       - $configFolder/prowlarr:/config
   zurg:
@@ -76,7 +72,7 @@ services:
     image: rclone/rclone:latest
     container_name: rclone
     volumes:
-      - /mnt/remote/realdebrid:/realdebrid:rshared # CHANGE /mnt/zurg WITH YOUR PREFERRED MOUNT PATH
+      - /$realdebridFolder:/realdebrid:rshared # CHANGE /mnt/zurg WITH YOUR PREFERRED MOUNT PATH
       - $configFolder/rclone/rclone.conf:/config/rclone/rclone.conf
     cap_add:
       - SYS_ADMIN
@@ -88,12 +84,22 @@ services:
       - zurg
     command: "mount zurg: /data --allow-other --allow-non-empty --dir-cache-time 10s --vfs-cache-mode full"
   decypharr:
-    <<: *common-download
+    <<: *common-base
     image: cy01/blackhole:latest
     container_name: decypharr
     ports:
       - "8282:8282"
     volumes:
-      - /mnt/remote/realdebrid:/realdebrid:rslave
+      - *vol_dl
   plex:
-    <<: common-stream
+    restart: unless-stopped
+    network_mode: host
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    environment: 
+      - *common_env
+      - VERSION=docker
+    volumes:
+      - *vol_lib
+      - *vol_rd
+      - $configFolder/plex:/config

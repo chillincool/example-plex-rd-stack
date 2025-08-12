@@ -1,0 +1,5 @@
+zurg: v1
+token: REAL_DEBRID_API_TOKEN
+check_for_changes_every_secs: 10
+enable_repair: true
+auto_delete_rar_torrents: true
